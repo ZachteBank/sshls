@@ -1,11 +1,32 @@
 # SSH Config Manager
 
-A small native macOS app (SwiftUI) to manage `~/.ssh/config` through a GUI:
-add a host, give it an alias, set HostName / User / Port / IdentityFile, save.
-Then just `ssh myserver`.
+A small, native macOS app (SwiftUI) for editing `~/.ssh/config` — plus a tiny
+CLI, `sshls`, for listing hosts from the terminal. Both share one library, so
+they behave identically.
 
-No Xcode project — it's a Swift Package. Everything builds with the Command
-Line Tools.
+Add a host, give it an alias, set `HostName` / `User` / `Port` / `IdentityFile`,
+save. Then just `ssh myserver`.
+
+There is no Xcode project — it's a Swift Package and builds with the Command
+Line Tools alone.
+
+## Features
+
+- **Native SwiftUI GUI** — list, search, add, edit and delete hosts.
+- **Round-trip-safe writes** — `Include` lines, comments, blank lines and the
+  `Host *` defaults block survive byte-for-byte. Only the host block you edit is
+  rewritten.
+- **Append-only history** — every save is snapshotted to
+  `~/.ssh/config.history/`, so a bad edit can never destroy a good one.
+  Restores are non-destructive and themselves undoable.
+- **`sshls` CLI** — pipe-friendly host listing with the same search matching as
+  the GUI.
+- **Safe by default** — saved files keep `0600` permissions.
+
+## Requirements
+
+- macOS 14 or later
+- Swift 5.9 toolchain (Command Line Tools are enough — no Xcode project)
 
 ## Run (development)
 
@@ -31,16 +52,18 @@ swift run SSHConfigKitChecks
 ## How it touches your file
 
 - Writes to the real `~/.ssh/config`.
-- Re-applies `0600` perms on save.
+- Re-applies `0600` permissions on save.
 - Round-trip-safe: `Include` lines, comments, blank lines and the `Host *`
   defaults block are preserved byte-for-byte. Only the `Host` block you edit is
   rewritten.
+- Wildcard `Host` patterns (`*`, `?`) are config defaults, not connectable
+  hosts — kept in the file but hidden from lists.
 
 ## Version history (no data loss)
 
-Every save writes a new version to `~/.ssh/config.history/` (mode `0700`,
-files `0600`). Nothing is ever overwritten or deleted, so a bad edit can't
-destroy an earlier good one.
+Every save writes a new version to `~/.ssh/config.history/` (directory mode
+`0700`, files `0600`). Nothing is ever overwritten or deleted, so a bad edit
+can't destroy an earlier good one.
 
 - Filenames: `2026-10-12_11-22-33.456~add myserver.conf`
 - The first launch stores the untouched file as `original`.
@@ -64,7 +87,8 @@ swift run sshls -v root      # alias + user@host · port
 swift run sshls -h           # help
 ```
 
-Install it on your `PATH` (needs `sudo` once, since `/usr/local/bin` is root-owned):
+Install it on your `PATH` (needs `sudo` once, since `/usr/local/bin` is
+root-owned):
 
 ```sh
 swift build -c release
@@ -93,6 +117,16 @@ real command, so only do it if you're comfortable with that):
 ssh() { if [[ $1 == ls ]]; then shift; command sshls "$@"; else command ssh "$@"; fi }
 ```
 
+## Project layout
+
+```
+Sources/
+  SSHConfigKit/        shared library: model, parser/writer, history
+  SSHConfigManager/    SwiftUI app (@main, ConfigStore, views)
+  sshls/               CLI: prints host aliases, one per line
+  SSHConfigKitChecks/  the test suite (plain asserts)
+```
+
 ## Known limits (by design, add when needed)
 
 - `Host *` / wildcard blocks are hidden from the list (they're defaults, not
@@ -102,3 +136,7 @@ ssh() { if [[ $1 == ls ]]; then shift; command sshls "$@"; else command ssh "$@"
   can't edit them in the GUI yet.
 - A comment placed *inside* a host block, between directives, is not preserved
   when you edit that specific host.
+
+## License
+
+[MIT](LICENSE)
